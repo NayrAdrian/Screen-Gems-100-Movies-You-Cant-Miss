@@ -1,11 +1,12 @@
+import csv
 import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
-    QLabel, QPushButton, QLineEdit, QTableWidget, QTableWidgetItem, QStatusBar, QHeaderView
+    QLabel, QPushButton, QLineEdit, QTableWidget, QTableWidgetItem, QStatusBar, QFileDialog
 )
-from PyQt5.QtCore import Qt
 from bs4 import BeautifulSoup
 import requests
+from datetime import datetime
 
 
 class MovieApp(QMainWindow):
@@ -65,6 +66,7 @@ class MovieApp(QMainWindow):
         button_layout.addWidget(scrape_button)
 
         export_button = QPushButton("Export to CSV")
+        export_button.clicked.connect(self.export_to_csv)
         button_layout.addWidget(export_button)
 
         clear_button = QPushButton("Clear Data")
@@ -109,6 +111,32 @@ class MovieApp(QMainWindow):
     def clear_data(self):
         self.table_widget.setRowCount(0)
         self.status_bar.showMessage("Data cleared.", 5000)
+
+    def export_to_csv(self):
+        # Open file dialog to select save location
+        options = QFileDialog.Options()
+        # Add timestamp to filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"movies_export_{timestamp}.csv"
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save CSV File", default_filename, "CSV Files (*.csv)", options=options)
+
+        if not file_path:
+            return
+
+        # Write table data to CSV
+        with open(file_path, 'w', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            # Write the header
+            header = [self.table_widget.horizontalHeaderItem(i).text() for i in range(self.table_widget.columnCount())]
+            writer.writerow(header)
+
+            # Write the data
+            for row in range(self.table_widget.rowCount()):
+                row_data = [self.table_widget.item(row, col).text() if self.table_widget.item(row, col) else '' for col
+                            in range(self.table_widget.columnCount())]
+                writer.writerow(row_data)
+
+        self.status_bar.showMessage("Data exported to CSV successfully.", 5000)
 
     def scrape_top_100_movies(self):
         base_url = "https://editorial.rottentomatoes.com/guide/best-movies-of-all-time/"
