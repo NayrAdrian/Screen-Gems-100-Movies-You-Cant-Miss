@@ -1,71 +1,68 @@
-from bs4 import BeautifulSoup
-import requests
+import sys
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
+    QLabel, QPushButton, QLineEdit, QTableWidget, QTableWidgetItem, QStatusBar
+)
 
 
-def scrape_rotten_tomatoes(url):
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
-    }
-    response = requests.get(url, headers=headers)
+class MovieApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
 
-    if response.status_code != 200:
-        print(f"Failed to retrieve the page. Status code: {response.status_code}")
-        return []
+        # Main Window settings
+        self.setWindowTitle("Screen Gems: 100 Movies You Can't Miss")
+        self.setGeometry(100, 100, 1024, 768)
 
-    soup = BeautifulSoup(response.text, "html.parser")
+        # Central Widget
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
 
-    movies = []
+        # Main Layout
+        main_layout = QVBoxLayout()
 
-    # Find all movie containers
-    movie_containers = soup.find_all('div', class_='article_movie_title')
+        # Title Bar
+        title_label = QLabel("Top 100 Movies to Watch")
+        title_label.setStyleSheet("font-size: 24px; font-weight: bold; text-align: center;")
+        main_layout.addWidget(title_label)
 
-    for container in movie_containers:
-        title_element = container.find('a')
-        title = title_element.text.strip() if title_element else 'No title available'
-        year = container.find('span', class_='subtle start-year').text.strip() if container.find('span',
-                                                                                                 class_='subtle start-year') else 'No year available'
-        rating = container.find('span', class_='tMeterScore').text.strip() if container.find('span',
-                                                                                             class_='tMeterScore') else 'No rating available'
+        # Search Box
+        search_layout = QHBoxLayout()
+        self.search_box = QLineEdit()
+        self.search_box.setPlaceholderText("Search by title...")
+        search_layout.addWidget(self.search_box)
+        main_layout.addLayout(search_layout)
 
-        # Find the "Critics Consensus" description
-        description_container = container.find_next('div', class_='info critics-consensus')
-        description = description_container.get_text(
-            strip=True) if description_container else 'No description available'
+        # Movie Table
+        self.table_widget = QTableWidget()
+        self.table_widget.setRowCount(0)
+        self.table_widget.setColumnCount(4)
+        self.table_widget.setHorizontalHeaderLabels(["Rank", "Title", "Year", "Rating", "Description"])
+        main_layout.addWidget(self.table_widget)
 
-        # Clean up the description by removing the "Critics Consensus:" prefix
-        if description.startswith('Critics Consensus:'):
-            description = description.replace('Critics Consensus:', '').strip()
+        # Buttons Layout
+        button_layout = QHBoxLayout()
 
-        movies.append({
-            'Title': title,
-            'Year': year,
-            'Rating': rating,
-            'Description': description
-        })
+        scrape_button = QPushButton("Scrape Movies")
+        button_layout.addWidget(scrape_button)
 
-    return movies
+        export_button = QPushButton("Export to CSV")
+        button_layout.addWidget(export_button)
 
+        clear_button = QPushButton("Clear Data")
+        button_layout.addWidget(clear_button)
 
-def scrape_top_100_movies():
-    base_url = "https://editorial.rottentomatoes.com/guide/best-movies-of-all-time/"
+        main_layout.addLayout(button_layout)
 
-    # Scrape the first page
-    movies = scrape_rotten_tomatoes(base_url)
+        # Status Bar
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
 
-    # Scrape the second page
-    second_page_url = f"{base_url}page/2/"
-    movies += scrape_rotten_tomatoes(second_page_url)
-
-    top_100_movies = movies[:100]
-
-    return top_100_movies
+        # Set Layout
+        central_widget.setLayout(main_layout)
 
 
 if __name__ == "__main__":
-    top_movies = scrape_top_100_movies()
-    for movie in top_movies:
-        print(f"Title: {movie['Title']}")
-        print(f"Year: {movie['Year']}")
-        print(f"Rating: {movie['Rating']}")
-        print(f"Description: {movie['Description']}")
-        print("-" * 40)
+    app = QApplication(sys.argv)
+    window = MovieApp()
+    window.show()
+    sys.exit(app.exec_())
