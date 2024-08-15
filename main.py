@@ -1,8 +1,11 @@
 import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
-    QLabel, QPushButton, QLineEdit, QTableWidget, QTableWidgetItem, QStatusBar
+    QLabel, QPushButton, QLineEdit, QTableWidget, QTableWidgetItem, QStatusBar, QHeaderView
 )
+from PyQt5.QtCore import Qt
+from bs4 import BeautifulSoup
+import requests
 
 
 class MovieApp(QMainWindow):
@@ -10,7 +13,7 @@ class MovieApp(QMainWindow):
         super().__init__()
 
         # Main Window settings
-        self.setWindowTitle("Screen Gems: 100 Movies You Can't Miss")
+        self.setWindowTitle("Screen Gems: Top 100 Movies You Can't Miss")
         self.setGeometry(100, 100, 1024, 768)
 
         # Central Widget
@@ -21,7 +24,7 @@ class MovieApp(QMainWindow):
         main_layout = QVBoxLayout()
 
         # Title Bar
-        title_label = QLabel("Top 100 Movies to Watch")
+        title_label = QLabel("Screen Gems: 100 Movies You Can't Miss")
         title_label.setStyleSheet("font-size: 24px; font-weight: bold; text-align: center;")
         main_layout.addWidget(title_label)
 
@@ -35,30 +38,116 @@ class MovieApp(QMainWindow):
         # Movie Table
         self.table_widget = QTableWidget()
         self.table_widget.setRowCount(0)
-        self.table_widget.setColumnCount(4)
+        self.table_widget.setColumnCount(5)
         self.table_widget.setHorizontalHeaderLabels(["Rank", "Title", "Year", "Rating", "Description"])
+        self.table_widget.verticalHeader().setVisible(False)
+
+        # Set column widths
+        self.table_widget.setColumnWidth(0, 50)  # Rank column
+        self.table_widget.setColumnWidth(1, 200) # Title column
+        self.table_widget.setColumnWidth(2, 60)  # Year column
+        self.table_widget.setColumnWidth(3, 80)  # Rating column
+        self.table_widget.horizontalHeader().setStretchLastSection(True)  # Stretch the last column
+
+        # Enable word wrap for the description column
+        self.table_widget.setWordWrap(True)
+
+        # Ensure rows resize to fit contents
+        self.table_widget.resizeRowsToContents()
+
         main_layout.addWidget(self.table_widget)
 
         # Buttons Layout
         button_layout = QHBoxLayout()
 
         scrape_button = QPushButton("Scrape Movies")
+        scrape_button.clicked.connect(self.scrape_movies)
         button_layout.addWidget(scrape_button)
 
         export_button = QPushButton("Export to CSV")
         button_layout.addWidget(export_button)
 
         clear_button = QPushButton("Clear Data")
+        clear_button.clicked.connect(self.clear_data)
         button_layout.addWidget(clear_button)
 
         main_layout.addLayout(button_layout)
 
         # Status Bar
         self.status_bar = QStatusBar()
+        self.status_bar.setStyleSheet("height: 40px;")
         self.setStatusBar(self.status_bar)
+
+        # Disclaimer in Status Bar
+        self.status_bar.showMessage(
+            "Disclaimer: The data provided in this application is sourced from Rotten Tomatoes. "
+            "This app is intended solely for educational and study purposes only."
+        )
 
         # Set Layout
         central_widget.setLayout(main_layout)
+
+    def scrape_movies(self):
+        # Scrape the top 100 movies from Rotten Tomatoes
+        movies = self.scrape_top_100_movies()
+
+        # Populate the table with movie data
+        self.table_widget.setRowCount(len(movies))
+        for i, movie in enumerate(movies):
+            self.table_widget.setItem(i, 0, QTableWidgetItem(str(i + 1)))
+            self.table_widget.setItem(i, 1, QTableWidgetItem(movie['Title']))
+            self.table_widget.setItem(i, 2, QTableWidgetItem(movie['Year']))
+            self.table_widget.setItem(i, 3, QTableWidgetItem(movie['Rating']))
+            self.table_widget.setItem(i, 4, QTableWidgetItem(movie['Description']))
+
+        # Resize rows to fit the content
+        self.table_widget.resizeRowsToContents()
+
+        self.status_bar.showMessage("Movies scraped successfully! Disclaimer: All movie information is subject to "
+                                    "change and may not reflect the most current ratings or details.", 30000)
+
+    def clear_data(self):
+        self.table_widget.setRowCount(0)
+        self.status_bar.showMessage("Data cleared.", 5000)
+
+    def scrape_top_100_movies(self):
+        base_url = "https://editorial.rottentomatoes.com/guide/best-movies-of-all-time/"
+        movies = self.scrape_rotten_tomatoes(base_url)
+        second_page_url = f"{base_url}page/2/"
+        movies += self.scrape_rotten_tomatoes(second_page_url)
+        return movies[:100]
+
+    def scrape_rotten_tomatoes(self, url):
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+        }
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            self.status_bar.showMessage(f"Failed to retrieve the page. Status code: {response.status_code}", 5000)
+            return []
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        movies = []
+        movie_containers = soup.find_all('div', class_='article_movie_title')
+        for container in movie_containers:
+            title_element = container.find('a')
+            title = title_element.text.strip() if title_element else 'No title available'
+            year = container.find('span', class_='subtle start-year').text.strip() if container.find('span',
+                                                                                                     class_='subtle start-year') else 'No year available'
+            rating = container.find('span', class_='tMeterScore').text.strip() if container.find('span',
+                                                                                                 class_='tMeterScore') else 'No rating available'
+            description_container = container.find_next('div', class_='info critics-consensus')
+            description = description_container.get_text(
+                strip=True) if description_container else 'No description available'
+            if description.startswith('Critics Consensus:'):
+                description = description.replace('Critics Consensus:', '').strip()
+            movies.append({
+                'Title': title,
+                'Year': year,
+                'Rating': rating,
+                'Description': description
+            })
+        return movies
 
 
 if __name__ == "__main__":
