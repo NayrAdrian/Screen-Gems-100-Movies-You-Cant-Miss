@@ -1,5 +1,6 @@
 import csv
 import sys
+from PyQt5.QtCore import QUrl
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
     QLabel, QPushButton, QLineEdit, QTableWidget, QTableWidgetItem, QStatusBar, QFileDialog
@@ -7,6 +8,7 @@ from PyQt5.QtWidgets import (
 from bs4 import BeautifulSoup
 import requests
 from datetime import datetime
+from PyQt5.QtWebEngineWidgets import QWebEngineView
 
 
 class MovieApp(QMainWindow):
@@ -39,15 +41,16 @@ class MovieApp(QMainWindow):
         # Movie Table
         self.table_widget = QTableWidget()
         self.table_widget.setRowCount(0)
-        self.table_widget.setColumnCount(5)
-        self.table_widget.setHorizontalHeaderLabels(["Rank", "Title", "Year", "Rating", "Description"])
+        self.table_widget.setColumnCount(6)
+        self.table_widget.setHorizontalHeaderLabels(["Rank", "Title", "Year", "Rating", "Description", "Trailer"])
         self.table_widget.verticalHeader().setVisible(False)
 
         # Set column widths
         self.table_widget.setColumnWidth(0, 50)  # Rank column
-        self.table_widget.setColumnWidth(1, 200) # Title column
+        self.table_widget.setColumnWidth(1, 200)  # Title column
         self.table_widget.setColumnWidth(2, 60)  # Year column
         self.table_widget.setColumnWidth(3, 80)  # Rating column
+        self.table_widget.setColumnWidth(4, 500)  # Description column
         self.table_widget.horizontalHeader().setStretchLastSection(True)  # Stretch the last column
 
         # Enable word wrap for the description column
@@ -96,11 +99,17 @@ class MovieApp(QMainWindow):
         # Populate the table with movie data
         self.table_widget.setRowCount(len(movies))
         for i, movie in enumerate(movies):
+            # Add movie details
             self.table_widget.setItem(i, 0, QTableWidgetItem(str(i + 1)))
             self.table_widget.setItem(i, 1, QTableWidgetItem(movie['Title']))
             self.table_widget.setItem(i, 2, QTableWidgetItem(movie['Year']))
             self.table_widget.setItem(i, 3, QTableWidgetItem(movie['Rating']))
             self.table_widget.setItem(i, 4, QTableWidgetItem(movie['Description']))
+
+            # Add trailer button
+            trailer_button = QPushButton("Watch Trailer")
+            trailer_button.clicked.connect(lambda checked, url=movie['TrailerURL']: self.open_trailer(url))
+            self.table_widget.setCellWidget(i, 5, trailer_button)
 
         # Resize rows to fit the content
         self.table_widget.resizeRowsToContents()
@@ -118,7 +127,8 @@ class MovieApp(QMainWindow):
         # Add timestamp to filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         default_filename = f"movies_export_{timestamp}.csv"
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save CSV File", default_filename, "CSV Files (*.csv)", options=options)
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save CSV File", default_filename, "CSV Files (*.csv)",
+                                                   options=options)
 
         if not file_path:
             return
@@ -169,13 +179,37 @@ class MovieApp(QMainWindow):
                 strip=True) if description_container else 'No description available'
             if description.startswith('Critics Consensus:'):
                 description = description.replace('Critics Consensus:', '').strip()
+
+            # Replace this with the actual fetching logic
+            trailer_url = self.fetch_trailer_url(title, year)
+
             movies.append({
                 'Title': title,
                 'Year': year,
                 'Rating': rating,
-                'Description': description
+                'Description': description,
+                'TrailerURL': trailer_url
             })
         return movies
+
+    def fetch_trailer_url(self, title, year):
+        # Placeholder for the logic to fetch the trailer URL based on the movie title and year
+        # YouTube Data API
+        return ""
+
+    def open_trailer(self, url):
+        if not url:
+            self.status_bar.showMessage("Trailer not available.", 5000)
+            return
+        # Open in a new window using QWebEngineView
+        trailer_window = QMainWindow(self)
+        trailer_window.setWindowTitle("Movie Trailer")
+        trailer_window.setGeometry(100, 100, 800, 600)
+
+        web_view = QWebEngineView()
+        web_view.setUrl(QUrl(url))
+        trailer_window.setCentralWidget(web_view)
+        trailer_window.show()
 
 
 if __name__ == "__main__":
