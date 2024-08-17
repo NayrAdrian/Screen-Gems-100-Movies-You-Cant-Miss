@@ -9,6 +9,11 @@ from bs4 import BeautifulSoup
 import requests
 from datetime import datetime
 from PyQt5.QtWebEngineWidgets import QWebEngineView
+from googleapiclient.discovery import build
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 
 class MovieApp(QMainWindow):
@@ -93,29 +98,28 @@ class MovieApp(QMainWindow):
         central_widget.setLayout(main_layout)
 
     def scrape_movies(self):
-        # Scrape the top 100 movies from Rotten Tomatoes
-        movies = self.scrape_top_100_movies()
+        try:
+            movies = self.scrape_top_100_movies()
+            self.table_widget.setRowCount(len(movies))
+            for i, movie in enumerate(movies):
+                # Add movie details to the table
+                self.table_widget.setItem(i, 0, QTableWidgetItem(str(i + 1)))
+                self.table_widget.setItem(i, 1, QTableWidgetItem(movie['Title']))
+                self.table_widget.setItem(i, 2, QTableWidgetItem(movie['Year']))
+                self.table_widget.setItem(i, 3, QTableWidgetItem(movie['Rating']))
+                self.table_widget.setItem(i, 4, QTableWidgetItem(movie['Description']))
 
-        # Populate the table with movie data
-        self.table_widget.setRowCount(len(movies))
-        for i, movie in enumerate(movies):
-            # Add movie details
-            self.table_widget.setItem(i, 0, QTableWidgetItem(str(i + 1)))
-            self.table_widget.setItem(i, 1, QTableWidgetItem(movie['Title']))
-            self.table_widget.setItem(i, 2, QTableWidgetItem(movie['Year']))
-            self.table_widget.setItem(i, 3, QTableWidgetItem(movie['Rating']))
-            self.table_widget.setItem(i, 4, QTableWidgetItem(movie['Description']))
+                # Add trailer button
+                trailer_button = QPushButton("Watch Trailer")
+                trailer_button.clicked.connect(lambda checked, url=movie['TrailerURL']: self.open_trailer(url))
+                self.table_widget.setCellWidget(i, 5, trailer_button)
 
-            # Add trailer button
-            trailer_button = QPushButton("Watch Trailer")
-            trailer_button.clicked.connect(lambda checked, url=movie['TrailerURL']: self.open_trailer(url))
-            self.table_widget.setCellWidget(i, 5, trailer_button)
-
-        # Resize rows to fit the content
-        self.table_widget.resizeRowsToContents()
-
-        self.status_bar.showMessage("Movies scraped successfully! Disclaimer: All movie information is subject to "
+            self.table_widget.resizeRowsToContents()
+            self.status_bar.showMessage("Movies scraped successfully! Disclaimer: All movie information is subject to "
                                     "change and may not reflect the most current ratings or details.", 30000)
+        except Exception as e:
+            self.status_bar.showMessage(f"An error occurred: {str(e)}", 5000)
+            print(f"Error: {e}")  # Print the error for debugging
 
     def clear_data(self):
         self.table_widget.setRowCount(0)
@@ -193,9 +197,27 @@ class MovieApp(QMainWindow):
         return movies
 
     def fetch_trailer_url(self, title, year):
-        # Placeholder for the logic to fetch the trailer URL based on the movie title and year
-        # YouTube Data API
-        return ""
+        api_key = os.getenv("YT_DATA_API")
+        if not api_key:
+            self.status_bar.showMessage("YouTube API key not found. Please check your environment variables.", 5000)
+            return ""
+
+        youtube = build("youtube", "v3", developerKey=api_key)
+
+        search_query = f"{title} {year} official trailer"
+        search_response = youtube.search().list(
+            q=search_query,
+            part="id,snippet",
+            maxResults=1,
+            type="video"
+        ).execute()
+
+        if search_response['items']:
+            video_id = search_response['items'][0]['id']['videoId']
+            trailer_url = f"https://www.youtube.com/watch?v={video_id}"
+            return trailer_url
+        else:
+            return ""  # Return empty string if no trailer is found
 
     def open_trailer(self, url):
         if not url:
