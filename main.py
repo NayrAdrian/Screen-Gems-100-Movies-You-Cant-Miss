@@ -15,7 +15,6 @@ import os
 
 load_dotenv()
 
-
 class MovieApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -111,12 +110,12 @@ class MovieApp(QMainWindow):
 
                 # Add trailer button
                 trailer_button = QPushButton("Watch Trailer")
-                trailer_button.clicked.connect(lambda checked, url=movie['TrailerURL']: self.open_trailer(url))
+                trailer_button.clicked.connect(lambda checked, movie=movie: self.fetch_and_open_trailer(movie))
                 self.table_widget.setCellWidget(i, 5, trailer_button)
 
             self.table_widget.resizeRowsToContents()
             self.status_bar.showMessage("Movies scraped successfully! Disclaimer: All movie information is subject to "
-                                    "change and may not reflect the most current ratings or details.", 30000)
+                                        "change and may not reflect the most current ratings or details.", 30000)
         except Exception as e:
             self.status_bar.showMessage(f"An error occurred: {str(e)}", 5000)
             print(f"Error: {e}")  # Print the error for debugging
@@ -184,17 +183,21 @@ class MovieApp(QMainWindow):
             if description.startswith('Critics Consensus:'):
                 description = description.replace('Critics Consensus:', '').strip()
 
-            # Replace this with the actual fetching logic
-            trailer_url = self.fetch_trailer_url(title, year)
-
+            # TrailerURL will be empty initially
             movies.append({
                 'Title': title,
                 'Year': year,
                 'Rating': rating,
                 'Description': description,
-                'TrailerURL': trailer_url
+                'TrailerURL': ""
             })
         return movies
+
+    def fetch_and_open_trailer(self, movie):
+        if not movie['TrailerURL']:
+            # Fetch the trailer URL only when needed
+            movie['TrailerURL'] = self.fetch_trailer_url(movie['Title'], movie['Year'])
+        self.open_trailer(movie['TrailerURL'])
 
     def fetch_trailer_url(self, title, year):
         api_key = os.getenv("YT_DATA_API")
@@ -214,24 +217,35 @@ class MovieApp(QMainWindow):
 
         if search_response['items']:
             video_id = search_response['items'][0]['id']['videoId']
-            trailer_url = f"https://www.youtube.com/watch?v={video_id}"
-            return trailer_url
+            return f"https://www.youtube.com/watch?v={video_id}"
         else:
-            return ""  # Return empty string if no trailer is found
+            self.status_bar.showMessage(f"Trailer not found for {title}.", 5000)
+            return ""
 
-    def open_trailer(self, url):
-        if not url:
-            self.status_bar.showMessage("Trailer not available.", 5000)
-            return
-        # Open in a new window using QWebEngineView
-        trailer_window = QMainWindow(self)
-        trailer_window.setWindowTitle("Movie Trailer")
-        trailer_window.setGeometry(100, 100, 800, 600)
+    def open_trailer(self, trailer_url):
+        if trailer_url:
+            self.trailer_window = QMainWindow(self)
+            self.trailer_window.setWindowTitle("Watch Trailer")
+            self.trailer_window.setGeometry(150, 150, 800, 600)
 
-        web_view = QWebEngineView()
-        web_view.setUrl(QUrl(url))
-        trailer_window.setCentralWidget(web_view)
-        trailer_window.show()
+            # Create a QWebEngineView to show the trailer
+            self.view = QWebEngineView(self.trailer_window)
+            self.view.setUrl(QUrl(trailer_url))
+
+            # Set the QWebEngineView as the central widget of the new window
+            self.trailer_window.setCentralWidget(self.view)
+
+            # Connect the close event to a custom method to stop the video
+            self.trailer_window.closeEvent = self.close_trailer_window
+
+            self.trailer_window.show()
+        else:
+            self.status_bar.showMessage("Trailer URL not available.", 5000)
+
+    def close_trailer_window(self, event):
+        # Stop the video by unloading the URL
+        self.view.setUrl(QUrl())
+        event.accept()
 
 
 if __name__ == "__main__":
